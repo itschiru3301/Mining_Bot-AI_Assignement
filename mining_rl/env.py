@@ -71,6 +71,7 @@ class MiningEnv:
         for _ in range(self.frame_stack):
             self._frames.append(frame)
         self._stats = dict(ret=0.0, length=0, damage=0, **{m: 0 for m in MINED})
+        self._stats["lava"] = 0.0
         return self._obs()
 
     def step(self, action):
@@ -102,6 +103,8 @@ class MiningEnv:
         truncated = bool(done and not dead)
         info = {}
         if terminated or truncated:
+            # Death cause: walking into lava is instant, everything else is mob damage.
+            s["lava"] = float(dead and self._env._world[player.pos][0] == "lava")
             info["episode"] = dict(s, dead=float(dead))
         return self._obs(), float(reward), terminated, truncated, info
 

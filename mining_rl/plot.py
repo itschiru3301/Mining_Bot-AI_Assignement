@@ -67,12 +67,12 @@ def group_eval(evals, key):
 
 
 def fig_learning(runs_dir, evals, out):
-    grid = np.linspace(0, 5_000_000, 201)[1:]
+    grid = np.linspace(0, 4_990_000, 200)[1:]  # last PPO update lands just under 5M
     panels = [("ep_ret", "Episode return"), ("ep_ores", "Ore blocks mined / episode"),
-              ("ep_dead", "Episodes ending in death")]
+              ("ep_length", "Episode length (steps)")]
     fig, axes = plt.subplots(1, 3, figsize=(7.0, 2.1))
     rand = group_eval(evals, "random")
-    rand_key = {"ep_ret": "ret", "ep_ores": "ores", "ep_dead": "dead"}
+    rand_key = {"ep_ret": "ret", "ep_ores": "ores", "ep_length": "length"}
     for ax, (metric, title) in zip(axes, panels):
         for key in ("ppo", "dqn"):
             c = load_curves(runs_dir, key, grid).get(metric)
@@ -91,11 +91,10 @@ def fig_learning(runs_dir, evals, out):
         ax.set_title(title, loc="left", color=INK)
         ax.set_xlabel("Environment steps (millions)")
         ax.set_xlim(0, 5.6)
-        if metric == "ep_dead":
-            ax.yaxis.set_major_formatter(matplotlib.ticker.PercentFormatter(1.0))
     axes[0].legend(frameon=False, loc="upper left")
     fig.tight_layout(w_pad=1.5)
     fig.savefig(out)
+    fig.savefig(out.replace(".pdf", ".png"))
     plt.close(fig)
 
 
@@ -119,6 +118,7 @@ def bar_panels(evals, keys, panels, out, figsize):
         ax.grid(axis="x", visible=False)
     fig.tight_layout(w_pad=1.2)
     fig.savefig(out)
+    fig.savefig(out.replace(".pdf", ".png"))
     plt.close(fig)
 
 
@@ -134,7 +134,7 @@ def main():
     fig_learning(args.runs_dir, evals, os.path.join(args.out_dir, "learning_curves.pdf"))
     bar_panels(evals, ["ppo", "dqn", "random"],
                [("coal", "Coal / episode", "{:.2f}"), ("iron", "Iron / episode", "{:.2f}"),
-                ("diamond", "Diamond / episode", "{:.2f}"), ("damage", "Health lost / episode", "{:.1f}")],
+                ("diamond", "Diamond / episode", "{:.2f}"), ("length", "Steps survived", "{:.0f}")],
                os.path.join(args.out_dir, "eval_bars.pdf"), (7.0, 1.9))
     bar_panels(evals, ["ppo", "ppo_nodmg", "ppo_pixels"],
                [("ret", "Return (same reward)", "{:.2f}"), ("ores", "Ores / episode", "{:.2f}"),
