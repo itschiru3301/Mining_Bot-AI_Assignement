@@ -1,0 +1,96 @@
+\documentclass[conference,10pt]{IEEEtran}
+\usepackage{graphicx,amsmath,amssymb,booktabs,url,xcolor}
+\usepackage[hidelinks]{hyperref}
+\usepackage[font=footnotesize]{caption}
+\setlength{\textfloatsep}{6pt plus 2pt minus 2pt}
+\setlength{\dbltextfloatsep}{6pt plus 2pt minus 2pt}
+\setlength{\abovedisplayskip}{3pt}\setlength{\belowdisplayskip}{3pt}
+
+\begin{document}
+\title{Learning to Mine from Pixels: Reinforcement Learning for\\Autonomous Resource Extraction in a Minecraft-like World}
+\author{\IEEEauthorblockN{TEAM MEMBER 1 (Roll No.), TEAM MEMBER 2 (Roll No.)}
+\IEEEauthorblockA{AI Course, Assignment 2 \quad$\cdot$\quad
+GitHub: \url{https://github.com/USERNAME/rl-mining}}}
+\maketitle
+
+\begin{abstract}
+Autonomous mining robots must find and extract ore using only their camera feed, while avoiding hazards. We cast this as a Markov decision process in Crafter, a procedurally generated world modelled on Minecraft. The agent sees stacked 64$\times$64 RGB frames and its inventory, chooses among six discrete move/mine actions, and is rewarded for every ore block it mines. It pays a small penalty per step and for any damage. A PPO agent implemented from scratch mines \textbf{10.1 ore blocks per episode} on unseen worlds. That is 31\% more than a Double-DQN baseline (7.7) and over 100$\times$ more than a random policy (0.08).
+\end{abstract}
+
+\section{Problem and Motivation}
+Underground mining is dangerous, which makes it a natural target for autonomous robots. The robot has to explore unknown terrain, recognise valuable deposits from what it sees, tunnel to them and survive hazards such as lava and hostile machinery or animals. No labelled dataset of ``correct'' mining trajectories exists, but whether ore was extracted and whether the robot was damaged are easy to measure. That makes the problem a good fit for reinforcement learning (RL). Full Minecraft (MineRL~\cite{minerl}) runs at about 60 steps/s, so pixel-based RL there needs far more compute than a course project has. We therefore use \textbf{Crafter}~\cite{crafter}. It keeps the essential ingredients: egocentric pixels, stone, coal, iron and diamond deposits, lava, zombies and skeletons, a day/night cycle and new worlds every episode. It runs at about 1000 steps/s per CPU core. The world simulator is used unmodified. The mining task, reward, vectorised environment, networks, PPO, DQN and evaluation code were all written for this project.
+
+\section{RL Formulation}
+\textbf{Task.} Each episode generates a new 64$\times$64-tile world, and the robot spawns with wood, stone and iron pickaxes. A robot does not eat or sleep, so we disable Crafter's hunger, thirst and fatigue. Health still regenerates slowly, but lava kills instantly, and zombies (on grassland, mostly at night) and skeletons' arrows (in dark tunnels) deal damage. An episode ends when health reaches~0 (\emph{termination}) or after $T{=}1000$ steps (\emph{truncation}). At truncation we bootstrap from $V(s_T)$, because hitting the time limit is not a real terminal state.
+
+\textbf{State space $\mathcal{S}$.} $s_t=(x_t,u_t)$. Here $x_t\in\{0..255\}^{12\times64\times64}$ is the last four 64$\times$64 RGB frames. Each frame shows a 9$\times$7-tile egocentric view of the world plus an inventory strip, and stacking frames gives motion cues such as approaching mobs and arrows. $u_t\in[0,1]^{16}$ is the inventory and vitals vector (health, stone, coal, iron, diamond, tools, \dots) divided by its maximum of 9. The state is only partially observable: the robot sees a small window and nothing through darkness.
+
+\textbf{Action space $\mathcal{A}$.} Six discrete actions: \texttt{noop}, \texttt{move}$\in$\{left, right, up, down\} and \texttt{do}. A move also turns the robot to face that direction, so moving and turning are a single action. \texttt{do} mines the block the robot faces, or attacks a mob there. Crafter's crafting and placing actions are removed.
+
+\textbf{Reward $\mathcal{R}$.} Let $\Delta n^{k}_t$ be the number of blocks of type $k$ mined at step $t$ (read from Crafter's uncapped counters, because inventory slots saturate at 9), $\Delta h_t$ the health lost and $d_t$ a death indicator:
+\begin{equation}
+r_t=\!\!\sum_{k}\! w_k\Delta n^{k}_t - \underbrace{0.001}_{\text{time}} - \underbrace{0.1\,\Delta h_t}_{\text{damage}} - \underbrace{1.0\,d_t}_{\text{destroyed}},
+\end{equation}
+with $w_{\text{coal}}{=}1$, $w_{\text{iron}}{=}2$, $w_{\text{diamond}}{=}5$, which mirrors their rarity and value. $w_{\text{stone}}{=}0.02$ is a small shaping term that encourages tunnelling, which is how the robot explores. The time penalty rewards mining quickly. The damage and death terms encode safety. We use a discount of $\gamma=0.99$.
+
+\section{Algorithms}
+\textbf{Network.} The image goes through a 3-layer CNN (32/64/64 filters, kernels 8/4/3, strides 4/2/1). The inventory goes through a 64-unit MLP. The two outputs are concatenated and fused into a 512-d feature. PPO puts policy and value heads on this feature, and DQN puts a Q-value head on it.
+
+\textbf{PPO (main agent)}~\cite{ppo} maximises the clipped surrogate
+$L=\mathbb{E}_t[\min(\rho_t\hat A_t,\operatorname{clip}(\rho_t,1{\pm}0.2)\hat A_t)] - 0.5L_V + 0.01\mathcal{H}[\pi]$,
+where $\rho_t=\pi_\theta(a_t|s_t)/\pi_{\theta_\text{old}}(a_t|s_t)$ and $\hat A_t$ comes from GAE ($\lambda{=}0.95$)~\cite{gae}. We collect rollouts of 256 steps from each of 16 parallel worlds, run 4 epochs over 8 minibatches each, and use Adam at $3{\times}10^{-4}$ with linear decay and gradient clipping at 0.5.
+
+\textbf{DQN (baseline)}~\cite{dqn} uses the same encoder with Double-DQN targets~\cite{ddqn}, $y=r+\gamma(1{-}d)\,Q_{\bar\theta}(s',\arg\max_a Q_\theta(s',a))$. It has a 100k replay buffer stored on the GPU, a Huber loss, batch size 64, one update per 8 environment steps, a target-network sync every 10k steps, and $\varepsilon$ decaying from 1 to 0.05 over the first 10\% of training. \textbf{Random} picks actions uniformly at random. Both RL agents train for 5M environment steps on 3 seeds each (PPO about 1.6\,h, DQN about 2.5\,h per seed on one RTX A5000). We evaluate on 100 episodes in \emph{held-out} worlds.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{figures/agent_frames.pdf}\vspace{-2pt}
+\caption{One held-out episode of the trained PPO agent (input frames upscaled). It leaves the grassland, finds a deposit and mines coal, iron and a diamond. It is then worn down after nightfall by skeletons in the tunnels.}
+\label{fig:frames}
+\end{figure*}
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{figures/learning_curves.pdf}\vspace{-3pt}
+\caption{Training curves (mean of 3 seeds; shading shows the min--max range across seeds; dashed line is the random policy). DQN learns faster at first thanks to replay, but PPO overtakes it after about 3.5M steps and keeps improving. DQN survives longer but mines more slowly.}
+\label{fig:curves}
+\end{figure*}
+
+\section{Results}
+\begin{table}[t]
+\centering\footnotesize
+\caption{Evaluation on 100 held-out episodes per seed (mean $\pm$ std over 3 seeds).}
+\label{tab:main}
+\setlength{\tabcolsep}{3.2pt}
+\begin{tabular}{lcccccc}
+\toprule
+Agent & Return & Coal & Iron & Diamond & Ores/100 st. & Steps \\
+\midrule
+PPO    & \textbf{12.7}$\pm$0.9 & \textbf{6.85} & \textbf{2.80} & \textbf{0.48} & \textbf{4.46} & 227 \\
+DQN    & 9.1$\pm$1.5 & 5.33 & 2.03 & 0.37 & 2.62 & \textbf{296} \\
+Random & $-$2.05 & 0.03 & 0.04 & 0.01 & 0.04 & 181 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Main comparison.} Table~\ref{tab:main} and Fig.~\ref{fig:curves}. Both RL agents learn to leave the grassland, find a deposit and tunnel through it. PPO reaches the highest return and ore yield, with low variance across seeds. Its advantage is largest for the rarer, more valuable ores (iron +38\%, diamond +30\% over DQN). DQN is clearly more \emph{sample-efficient early on}: it reaches a return of 5 after 0.7--0.8M steps, compared with PPO's 1.4--1.7M, because each transition is replayed many times. But it plateaus around 9--10 and is less consistent across seeds. DQN episodes last longer (296 vs.\ 227 steps) but it mines only 2.6 ores per 100 steps against PPO's 4.5. PPO has learned a faster, more aggressive mining policy, accepting more risk, including 16\% of its deaths from lava versus 5\% for DQN, in exchange for a higher yield.
+
+\textbf{Ablations.} ABLATION_TEXT
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/ablation_bars.pdf}\vspace{-3pt}
+\caption{PPO ablations (held-out evaluation, every agent scored with the full reward of Eq.~1).}
+\label{fig:abl}
+\end{figure}
+
+\textbf{Limitations and future work.} Almost every episode ends in death, typically soon after the first nightfall (around step 200). The agent has no sword and no memory beyond four frames, so it cannot fight off or hide from the mobs that spawn in the dark. Promising extensions include a recurrent (LSTM) policy, adding \texttt{place\_stone} to wall off threats, a survival curriculum, and moving the learned formulation to 3-D MineRL.
+
+\begin{thebibliography}{9}\footnotesize
+\bibitem{crafter} D.~Hafner, ``Benchmarking the spectrum of agent capabilities,'' \emph{ICLR}, 2022.
+\bibitem{minerl} W.~H.~Guss \emph{et al.}, ``MineRL: A large-scale dataset of Minecraft demonstrations,'' \emph{IJCAI}, 2019.
+\bibitem{ppo} J.~Schulman \emph{et al.}, ``Proximal policy optimization algorithms,'' arXiv:1707.06347, 2017.
+\bibitem{gae} J.~Schulman \emph{et al.}, ``High-dimensional continuous control using generalized advantage estimation,'' \emph{ICLR}, 2016.
+\bibitem{dqn} V.~Mnih \emph{et al.}, ``Human-level control through deep reinforcement learning,'' \emph{Nature}, 2015.
+\bibitem{ddqn} H.~van Hasselt, A.~Guez, D.~Silver, ``Deep reinforcement learning with double Q-learning,'' \emph{AAAI}, 2016.
+\end{thebibliography}
+\end{document}

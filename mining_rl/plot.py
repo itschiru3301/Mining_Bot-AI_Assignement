@@ -122,6 +122,21 @@ def bar_panels(evals, keys, panels, out, figsize):
     plt.close(fig)
 
 
+def fig_frames(gif, steps, captions, out):
+    """Row of frames from a recorded episode."""
+    import imageio
+    frames = imageio.mimread(gif, memtest=False)
+    fig, axes = plt.subplots(1, len(steps), figsize=(7.0, 1.95))
+    for ax, t, cap in zip(axes.flat, steps, captions):
+        ax.imshow(np.asarray(frames[t])[..., :3])
+        ax.set_title(f"t = {t}: {cap}", loc="left", fontsize=7, color=INK, pad=2)
+        ax.axis("off")
+    fig.tight_layout(pad=0.2, w_pad=0.4)
+    fig.savefig(out)
+    fig.savefig(out.replace(".pdf", ".png"))
+    plt.close(fig)
+
+
 def main():
     p = argparse.ArgumentParser(description="Plot training curves and evaluation results")
     p.add_argument("--runs-dir", default="results/runs")
@@ -140,6 +155,11 @@ def main():
                [("ret", "Return (same reward)", "{:.2f}"), ("ores", "Ores / episode", "{:.2f}"),
                 ("dead", "Death rate", "{:.0%}")],
                os.path.join(args.out_dir, "ablation_bars.pdf"), (3.45, 2.0))
+    gif = "results/media/ppo_agent.gif"
+    if os.path.exists(gif):
+        fig_frames(gif, [0, 84, 196, 308],
+                   ["spawn (grassland)", "mining an ore field", "night falls", "skeletons in tunnels"],
+                   os.path.join(args.out_dir, "agent_frames.pdf"))
     print("figures written to", args.out_dir)
 
 
