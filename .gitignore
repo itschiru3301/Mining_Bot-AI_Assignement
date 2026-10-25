@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+*.egg-info/
+report/*.aux
+report/*.log
+report/*.out
+report/*.synctex.gz
+# intermediate checkpoints; only final agents are committed
+checkpoints/**/*_step*.pt

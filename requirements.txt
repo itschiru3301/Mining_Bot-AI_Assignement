@@ -1,0 +1,7 @@
+torch>=2.1
+numpy>=1.24
+crafter==1.8.3
+numba>=0.58
+matplotlib>=3.7
+pandas>=2.0
+imageio>=2.30
