@@ -18,9 +18,12 @@ AGENTS = {
     "ppo": dict(label="PPO", color="#2a78d6"),
     "dqn": dict(label="DQN", color="#eb6834"),
     "random": dict(label="Random", color="#1baf7a"),
-    "ppo_nodmg": dict(label="PPO, no damage penalty", color="#e87ba4"),
-    "ppo_pixels": dict(label="PPO, 1 frame, no inventory", color="#008300"),
+    "ppo_nodmg": dict(label="PPO, no damage penalty", short="No damage\npenalty", color="#e87ba4"),
+    "ppo_fs1": dict(label="PPO, 1 frame", short="1 frame", color="#eda100"),
+    "ppo_noinv": dict(label="PPO, no inventory vector", short="No inventory\nvector", color="#6250d6"),
+    "ppo_pixels": dict(label="PPO, 1 frame, no inventory", short="1 frame,\nno inventory", color="#008300"),
 }
+AGENTS["ppo"]["short"] = "Full PPO\n(4 frames + inv.)"
 INK, MUTED, GRID = "#0b0b0b", "#52514e", "#e4e3df"
 
 plt.rcParams.update({
@@ -98,7 +101,7 @@ def fig_learning(runs_dir, evals, out):
     plt.close(fig)
 
 
-def bar_panels(evals, keys, panels, out, figsize):
+def bar_panels(evals, keys, panels, out, figsize, short=False):
     keys = [k for k in keys if group_eval(evals, k)]
     stats = {k: group_eval(evals, k) for k in keys}
     fig, axes = plt.subplots(1, len(panels), figsize=figsize)
@@ -113,7 +116,8 @@ def bar_panels(evals, keys, panels, out, figsize):
         for xi, m, s in zip(x, means, stds):
             ax.text(xi, m + s + 0.03 * top, fmt.format(m), ha="center", va="bottom", fontsize=6.5, color=INK)
         ax.set_ylim(0, top * 1.2)
-        ax.set_xticks(x, [AGENTS[k]["label"].replace(", ", ",\n") for k in keys])
+        ax.set_xticks(x, [AGENTS[k]["short"] if short else AGENTS[k]["label"] for k in keys],
+                      fontsize=6 if short else 7)
         ax.set_title(title, loc="left", color=INK)
         ax.grid(axis="x", visible=False)
     fig.tight_layout(w_pad=1.2)
@@ -151,14 +155,14 @@ def main():
                [("coal", "Coal / episode", "{:.2f}"), ("iron", "Iron / episode", "{:.2f}"),
                 ("diamond", "Diamond / episode", "{:.2f}"), ("length", "Steps survived", "{:.0f}")],
                os.path.join(args.out_dir, "eval_bars.pdf"), (7.0, 1.9))
-    bar_panels(evals, ["ppo", "ppo_nodmg", "ppo_pixels"],
-               [("ret", "Return (same reward)", "{:.2f}"), ("ores", "Ores / episode", "{:.2f}"),
-                ("dead", "Death rate", "{:.0%}")],
-               os.path.join(args.out_dir, "ablation_bars.pdf"), (3.45, 2.0))
+    bar_panels(evals, ["ppo", "ppo_nodmg", "ppo_fs1", "ppo_noinv", "ppo_pixels"],
+               [("ret", "Return (full reward)", "{:.1f}"), ("ores", "Ores / episode", "{:.1f}"),
+                ("length", "Steps survived", "{:.0f}")],
+               os.path.join(args.out_dir, "ablation_bars.pdf"), (7.0, 2.0), short=True)
     gif = "results/media/ppo_agent.gif"
     if os.path.exists(gif):
-        fig_frames(gif, [0, 84, 196, 308],
-                   ["spawn (grassland)", "mining an ore field", "night falls", "skeletons in tunnels"],
+        fig_frames(gif, [0, 88, 154, 220],
+                   ["spawn (grassland)", "tunnelling a coal seam", "iron, diamond, skeleton", "night: zombies close in"],
                    os.path.join(args.out_dir, "agent_frames.pdf"))
     print("figures written to", args.out_dir)
 

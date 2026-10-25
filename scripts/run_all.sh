@@ -24,13 +24,21 @@ for s in 1 2; do
     --run-name ppo_pixels_s$s > logs/ppo_pixels_s$s.log 2>&1 &
 done
 wait
+for s in 1 2; do
+  python -m mining_rl.ppo --seed $s --total-steps $STEPS --frame-stack 1 \
+    --run-name ppo_fs1_s$s > logs/ppo_fs1_s$s.log 2>&1 &
+  python -m mining_rl.ppo --seed $s --total-steps $STEPS --no-inventory \
+    --run-name ppo_noinv_s$s > logs/ppo_noinv_s$s.log 2>&1 &
+done
+wait
 
 # 3) evaluation on held-out worlds (100 episodes per agent)
 python -m mining_rl.evaluate --agent random --episodes 100
-for ck in checkpoints/ppo_s?.pt checkpoints/dqn_s?.pt checkpoints/ppo_nodmg_s?.pt checkpoints/ppo_pixels_s?.pt; do
+for ck in checkpoints/ppo_s?.pt checkpoints/dqn_s?.pt checkpoints/ppo_nodmg_s?.pt checkpoints/ppo_pixels_s?.pt \
+          checkpoints/ppo_fs1_s?.pt checkpoints/ppo_noinv_s?.pt; do
   python -m mining_rl.evaluate --checkpoint "$ck" --episodes 100
 done
 
 # 4) figures + a GIF of the trained agent
 python -m mining_rl.plot
-python -m mining_rl.record --checkpoint checkpoints/ppo_s1.pt --out results/media/ppo_agent.gif
+python -m mining_rl.record --checkpoint checkpoints/ppo_s3.pt --out results/media/ppo_agent.gif

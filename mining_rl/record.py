@@ -25,6 +25,7 @@ def main():
     p.add_argument("--seed", type=int, default=EVAL_SEED)
     args = p.parse_args()
 
+    torch.manual_seed(args.seed)  # PPO samples its actions; fix the sampling for repeatable GIFs
     algo, cfg, state = load_agent(args.checkpoint, "cpu")
     cfg.no_damage_penalty = False
     env = MiningEnv(seed=args.seed, **env_kwargs(cfg))
