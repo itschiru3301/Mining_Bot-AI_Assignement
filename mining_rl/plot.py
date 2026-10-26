@@ -73,7 +73,7 @@ def fig_learning(runs_dir, evals, out):
     grid = np.linspace(0, 4_990_000, 200)[1:]  # last PPO update lands just under 5M
     panels = [("ep_ret", "Episode return"), ("ep_ores", "Ore blocks mined / episode"),
               ("ep_length", "Episode length (steps)")]
-    fig, axes = plt.subplots(1, 3, figsize=(7.0, 2.1))
+    fig, axes = plt.subplots(1, 3, figsize=(7.0, 1.75))
     rand = group_eval(evals, "random")
     rand_key = {"ep_ret": "ret", "ep_ores": "ores", "ep_length": "length"}
     for ax, (metric, title) in zip(axes, panels):
@@ -94,7 +94,8 @@ def fig_learning(runs_dir, evals, out):
         ax.set_title(title, loc="left", color=INK)
         ax.set_xlabel("Environment steps (millions)")
         ax.set_xlim(0, 5.6)
-    axes[0].legend(frameon=False, loc="upper left")
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(handles, labels, frameon=False, loc="upper center", ncol=3, bbox_to_anchor=(0.5, 1.07))
     fig.tight_layout(w_pad=1.5)
     fig.savefig(out)
     fig.savefig(out.replace(".pdf", ".png"))
@@ -130,12 +131,12 @@ def fig_frames(gif, steps, captions, out):
     """Row of frames from a recorded episode."""
     import imageio
     frames = imageio.mimread(gif, memtest=False)
-    fig, axes = plt.subplots(1, len(steps), figsize=(7.0, 1.95))
+    fig, axes = plt.subplots(1, len(steps), figsize=(3.45, 1.08))  # one report column
     for ax, t, cap in zip(axes.flat, steps, captions):
         ax.imshow(np.asarray(frames[t])[..., :3])
-        ax.set_title(f"t = {t}: {cap}", loc="left", fontsize=7, color=INK, pad=2)
+        ax.set_title(f"({cap}) t = {t}", fontsize=6, color=INK, pad=1.5)
         ax.axis("off")
-    fig.tight_layout(pad=0.2, w_pad=0.4)
+    fig.tight_layout(pad=0.1, w_pad=0.25)
     fig.savefig(out)
     fig.savefig(out.replace(".pdf", ".png"))
     plt.close(fig)
@@ -162,7 +163,7 @@ def main():
     gif = "results/media/ppo_agent.gif"
     if os.path.exists(gif):
         fig_frames(gif, [0, 88, 154, 220],
-                   ["spawn (grassland)", "tunnelling a coal seam", "iron, diamond, skeleton", "night: zombies close in"],
+                   ["a", "b", "c", "d"],
                    os.path.join(args.out_dir, "agent_frames.pdf"))
     print("figures written to", args.out_dir)
 
