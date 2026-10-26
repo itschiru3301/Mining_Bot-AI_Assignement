@@ -65,7 +65,7 @@ python -m mining_rl.record   --checkpoint checkpoints/ppo_s1.pt --out results/me
 
 **Train:**
 ```bash
-python -m mining_rl.ppo --seed 1 --total-steps 5000000          # ~1.2 h with 16 envs + GPU
+python -m mining_rl.ppo --seed 1 --total-steps 5000000          # ~1.2-1.6 h with 16 envs + GPU
 python -m mining_rl.dqn --seed 1 --total-steps 5000000          # ~2.5 h
 # ablations
 python -m mining_rl.ppo --seed 1 --no-damage-penalty --run-name ppo_nodmg_s1
@@ -82,7 +82,36 @@ bash scripts/run_all.sh
 
 ## Results
 
-RESULTS_TABLE
+Evaluated on 100 episodes in **held-out worlds** for each seed (mean ± std over seeds). Every agent is scored with the same full reward.
+
+| Agent | Return | Coal | Iron | Diamond | Ores / 100 steps | Steps survived |
+|---|---|---|---|---|---|---|
+| **PPO** (main, 3 seeds) | **12.7 ± 0.9** | **6.85** | **2.80** | **0.48** | **4.46** | 227 |
+| DQN (3 seeds) | 9.1 ± 1.5 | 5.33 | 2.03 | 0.37 | 2.62 | 296 |
+| Random | −2.05 | 0.03 | 0.04 | 0.01 | 0.04 | 181 |
+
+![Learning curves](report/figures/learning_curves.png)
+![Evaluation](report/figures/eval_bars.png)
+
+**Ablations** (PPO, 2 seeds each):
+
+| Variant | Frames | Inventory vector | Damage penalty | Return | Ores | Steps |
+|---|---|---|---|---|---|---|
+| Full PPO (main) | 4 | ✓ | ✓ | 12.7 ± 0.9 | 10.1 | 227 |
+| No damage penalty | 4 | ✓ | – | 12.2 ± 0.5 | 9.9 | 209 |
+| No inventory vector | 4 | – | ✓ | 12.1 ± 0.5 | 9.5 | 230 |
+| **Single frame** | 1 | ✓ | ✓ | **16.5 ± 0.2** | **12.8** | 255 |
+| Single frame, no inventory | 1 | – | ✓ | 15.3 ± 0.9 | 11.9 | 267 |
+
+![Ablations](report/figures/ablation_bars.png)
+
+**Takeaways**
+- Both RL agents learn to leave the grassland, find ore deposits and tunnel through them. The random policy mines almost nothing.
+- DQN learns faster at first (return 5 after ~0.75M steps vs ~1.5M for PPO), but PPO overtakes it after ~3.5M steps. PPO ends with 31% more ore, mostly from the rarer iron and diamond.
+- DQN survives longer but mines slowly. PPO mines faster and takes more risk (16% of its deaths are from lava, vs 5% for DQN).
+- The damage penalty modestly improves survival (+8% episode length).
+- Frame stacking *hurts* at this 5M-step budget: a single frame plus the inventory vector is the best agent (`checkpoints/ppo_fs1_s*.pt`). The inventory vector gives a small, consistent gain.
+- Main failure mode: nearly every episode ends in death, soon after the first nightfall (~step 200), when zombies and skeletons appear. The agent has no sword or shelter actions.
 
 ## Algorithms and hyper-parameters
 
@@ -94,7 +123,7 @@ RESULTS_TABLE
 | Optimiser | Adam 3e-4, linearly annealed | Adam 1e-4 |
 | Discount γ | 0.99 (GAE λ = 0.95) | 0.99 |
 | Other | clip 0.2, 4 epochs × 8 minibatches, entropy 0.01, value 0.5, grad-norm 0.5 | Double-DQN, Huber loss, batch 64, 1 update / 8 env steps, target sync 10k steps, ε 1→0.05 over 10% |
-| Budget | 5M env steps × 3 seeds | 5M env steps × 3 seeds |
+| Budget | 5M env steps × 3 seeds (ablations: 2 seeds) | 5M env steps × 3 seeds |
 
 ## Report
 

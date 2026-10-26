@@ -1,7 +1,6 @@
 \documentclass[conference,10pt]{IEEEtran}
 \usepackage{graphicx,amsmath,amssymb,booktabs,url,xcolor}
 \usepackage[hidelinks]{hyperref}
-\usepackage[font=footnotesize]{caption}
 \setlength{\textfloatsep}{6pt plus 2pt minus 2pt}
 \setlength{\dbltextfloatsep}{6pt plus 2pt minus 2pt}
 \setlength{\abovedisplayskip}{3pt}\setlength{\belowdisplayskip}{3pt}
@@ -14,7 +13,7 @@ GitHub: \url{https://github.com/USERNAME/rl-mining}}}
 \maketitle
 
 \begin{abstract}
-Autonomous mining robots must find and extract ore using only their camera feed, while avoiding hazards. We cast this as a Markov decision process in Crafter, a procedurally generated world modelled on Minecraft. The agent sees stacked 64$\times$64 RGB frames and its inventory, chooses among six discrete move/mine actions, and is rewarded for every ore block it mines. It pays a small penalty per step and for any damage. A PPO agent implemented from scratch mines \textbf{10.1 ore blocks per episode} on unseen worlds. That is 31\% more than a Double-DQN baseline (7.7) and over 100$\times$ more than a random policy (0.08).
+Autonomous mining robots must find and extract ore using only their camera feed, while avoiding hazards. We cast this as a Markov decision process in Crafter, a procedurally generated world modelled on Minecraft. The agent sees stacked 64$\times$64 RGB frames and its inventory, chooses among six discrete move/mine actions, and is rewarded for every ore block it mines. It pays a small penalty per step and for any damage. A PPO agent implemented from scratch mines \textbf{10.1 ore blocks per episode} on unseen worlds. That is 31\% more than a Double-DQN baseline (7.7) and over 100$\times$ more than a random policy (0.08). Ablations show that the damage penalty modestly improves survival and that, surprisingly, a single-frame observation beats frame stacking, mining 12.8 ores per episode.
 \end{abstract}
 
 \section{Problem and Motivation}
@@ -45,7 +44,7 @@ where $\rho_t=\pi_\theta(a_t|s_t)/\pi_{\theta_\text{old}}(a_t|s_t)$ and $\hat A_
 \begin{figure*}[t]
 \centering
 \includegraphics[width=\textwidth]{figures/agent_frames.pdf}\vspace{-2pt}
-\caption{One held-out episode of the trained PPO agent (input frames upscaled). It leaves the grassland, finds a deposit and mines coal, iron and a diamond. It is then worn down after nightfall by skeletons in the tunnels.}
+\caption{An above-average held-out episode of the main PPO agent (return 30.3 vs.\ a mean of 12.7; frames upscaled from the 64$\times$64 input). It leaves the grassland, tunnels through coal and mines iron and a diamond. It is then worn down by a skeleton and, after nightfall, by zombies.}
 \label{fig:frames}
 \end{figure*}
 \begin{figure*}[t]
@@ -74,16 +73,27 @@ Random & $-$2.05 & 0.03 & 0.04 & 0.01 & 0.04 & 181 \\
 
 \textbf{Main comparison.} Table~\ref{tab:main} and Fig.~\ref{fig:curves}. Both RL agents learn to leave the grassland, find a deposit and tunnel through it. PPO reaches the highest return and ore yield, with low variance across seeds. Its advantage is largest for the rarer, more valuable ores (iron +38\%, diamond +30\% over DQN). DQN is clearly more \emph{sample-efficient early on}: it reaches a return of 5 after 0.7--0.8M steps, compared with PPO's 1.4--1.7M, because each transition is replayed many times. But it plateaus around 9--10 and is less consistent across seeds. DQN episodes last longer (296 vs.\ 227 steps) but it mines only 2.6 ores per 100 steps against PPO's 4.5. PPO has learned a faster, more aggressive mining policy, accepting more risk, including 16\% of its deaths from lava versus 5\% for DQN, in exchange for a higher yield.
 
-\textbf{Ablations.} ABLATION_TEXT
+\textbf{Ablations} (Table~\ref{tab:abl}). \emph{Reward design:} removing the damage and death terms shortens episodes by 8\% (209 vs.\ 227 steps) and lowers the return slightly. The safety terms do help survival, but the effect is modest, because the mobs that appear at night are hard to escape with this action set. \emph{Observation design:} our proposal assumed that stacked frames would help, but at this budget they hurt. A \emph{single} frame plus the inventory vector is the best agent overall, with a return of 16.5 and 12.8 ores per episode, 26\% more than the main agent. Dropping the stack helps both with and without the inventory vector. Crafter's world is nearly static, so the extra frames likely carry little motion information while quadrupling the input the CNN must learn from. The inventory vector gives a small but consistent gain (+0.6 return with 4 frames, +1.1 with 1 frame), even though the same counts are drawn in the image, probably because exact values such as health are easier to read from a vector than from tiny glyphs.
 
-\begin{figure}[t]
-\centering
-\includegraphics[width=\columnwidth]{figures/ablation_bars.pdf}\vspace{-3pt}
-\caption{PPO ablations (held-out evaluation, every agent scored with the full reward of Eq.~1).}
-\label{fig:abl}
-\end{figure}
+\begin{table}[t]
+\centering\footnotesize
+\caption{PPO ablations (2--3 seeds, held-out worlds). All agents are scored with the full reward of Eq.~1.}
+\label{tab:abl}
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{lccccc}
+\toprule
+Variant & Frames & Inv. & Dmg.\ pen. & Return & Ores / Steps \\
+\midrule
+Full PPO (main)      & 4 & \checkmark & \checkmark & 12.7$\pm$0.9 & 10.1 / 227 \\
+No damage penalty    & 4 & \checkmark & --         & 12.2$\pm$0.5 & 9.9 / 209 \\
+No inventory vector  & 4 & --         & \checkmark & 12.1$\pm$0.5 & 9.5 / 230 \\
+\textbf{Single frame}& 1 & \checkmark & \checkmark & \textbf{16.5}$\pm$0.2 & \textbf{12.8} / 255 \\
+Single frame, no inv.& 1 & --         & \checkmark & 15.3$\pm$0.9 & 11.9 / 267 \\
+\bottomrule
+\end{tabular}
+\end{table}
 
-\textbf{Limitations and future work.} Almost every episode ends in death, typically soon after the first nightfall (around step 200). The agent has no sword and no memory beyond four frames, so it cannot fight off or hide from the mobs that spawn in the dark. Promising extensions include a recurrent (LSTM) policy, adding \texttt{place\_stone} to wall off threats, a survival curriculum, and moving the learned formulation to 3-D MineRL.
+\textbf{Limitations and future work.} Results use only 2--3 seeds per configuration. Almost every episode ends in death, typically soon after the first nightfall (around step 200). The agent has no sword and no memory beyond four frames, so it cannot fight off or hide from the mobs that spawn in the dark. Promising extensions include a recurrent (LSTM) policy, adding \texttt{place\_stone} to wall off threats, a survival curriculum, and moving the learned formulation to 3-D MineRL.
 
 \begin{thebibliography}{9}\footnotesize
 \bibitem{crafter} D.~Hafner, ``Benchmarking the spectrum of agent capabilities,'' \emph{ICLR}, 2022.
